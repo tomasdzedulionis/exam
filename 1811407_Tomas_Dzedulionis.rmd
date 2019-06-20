@@ -1,0 +1,235 @@
+---
+title: "Egzaminas" #nekeisti
+author: "Tomas Dzedulionis, 1811407" 
+institute: "Vilniaus Universitetas (EVAF)" #nekeisti 
+date: "`r format(Sys.time(), '%Y-%m-%d %H:%M')`"#nekeisti
+output: #nekeisti
+  html_document: #nekeisti
+    number_sections: TRUE #nekeisti
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, collapse = TRUE, error = TRUE, warning = FALSE, message = FALSE)
+```
+
+# Prieš pradedant
+* Ant desktopo sukurkite direktoriją "exam", į ją išsaugokite šį dokumentą pakeisdami jo pavadinimą į "StudNr_Vardas_Pavarde.Rmd" (nenaudokite lt rašmenų) bei atitinkamai pakeisdami viršuje esančius laukelius: "author: ..."
+* Sumegzkite iškart šį dokumentą į .html failą ir įsitikinkite, jog viskas veikia gerai, tik tada pradėkite spręsti uždavinius.
+
+
+# Pasiruošimas
+Šioje kodo dalyje surašykite visus paskesnėse dalyse naudojamus R paketus. Kodas turi patikrinti, ar paketas yra instaliuotas, jeigu ne, instaliuoti bei užloadinti. Jeigu darbo eigoje prireikia naujų paketų, nepamirkite čia juos įrašyti.
+
+```{r, echo=TRUE, message=FALSE}
+if(!require(eurostat))install.packages("eurostat")
+require(eurostat)
+if(!require(tidyverse))install.packages("tidyverse")
+require(tidyverse)
+if(!require(reshape2))install.packages("reshape2")
+require(reshape2)
+if(!require(grid))install.packages("grid")
+require(grid)
+if(!require(knitr))install.packages("knitr")
+require(knitr)
+if(!require(kableExtra))install.packages("kableExtra")
+require(kableExtra)
+
+
+# Kodas
+```
+
+
+# Istorija
+Šiuo metu Jūs darbuojatės NVO "Stop skurdas". Koks tai "influenceris" patrolino visuomenę (galimai apmokėtas privačių pensijų fondų), jog Sodroje kaupti pensijai neapsimoka ir kaip pvz. pateikė savo mamulę, gaunančią vos 221 eurą per mėnesį. 
+https://i1.wp.com/lithuanian-economy.net/wp-content/uploads/2019/06/Saugirdas.jpg
+
+
+Komentaruose pasipylė aibė pasisakymų, jog jeigu neturėtume "pašalpinių" armijos ir jiems skirtus pinigus skirtume pensininkams, tai pensininkai gyventų "oriau".  
+
+Jums tokie argumentai sukelia daug abejonių. Kadangi Jūs kažkaip išgyvenote  duomenų analizės įvadą, Jūs nusprendžiate pateikti tam tikrus faktus viešai diskusijai. Šių faktų generavimas ir yra Jūsų egzamino užduotis.
+
+
+## Duomenų importas
+Importuokite duomenis iš eurostat apie tai, kiek Lietuva (visas valdžios sektorius) ir ES-28 skiria % BVP socialinei paramai. Kadangi datasetas yra didelis, rekomenduoju parsisiųsti tik reikalingus duomenis. 
+
+[Pagalba: "gov_10a_exp", reikalingos išlaidų rūšys "Social protection", "Old age", "Sickness and disability"]
+
+```{r}
+gov_10a_exp <- get_eurostat("gov_10a_exp", stringsAsFactors=FALSE) %>% filter(sector=="S13",                                                  cofog99 %in% c("GF10", "GF1001", "GF1002"),
+                                  geo %in% c("EU28","LT"),
+                                  na_item =="TE", 
+                                  sector=="S13",
+                                  unit=="PC_GDP")
+```
+
+## Duomenų apdorojimas
+Kadangi "pašalpiniai" gauna įvairią socialinę pagalbą (pvz., lengvatas būsto šildymui, vaikų maitinimui mokykloje ir t.t.), šioje dalyje pabandysime iš visų išlaidų socialinei apsaugai atimti pensijas ir ligos pašalpas, o likutį pavadinsime `pasalpa`. 
+
+Sukurkite nauja dataframe objektą, kuriame būtų LT ir EU28 laiko eilutės (nuo 2004 metų) su 2 išlaidų sritimis: pasalpa (kurią apskaičiavote) bei išlaidomis pensijoms.
+
+```{r}
+df<- filter(gov_10a_exp, time>="2004-01-01")
+df2 <- spread(df, cofog99, values, fill=0) %>%
+  transmute(geo,time, pasalpa = GF10-GF1001-GF1002, pensija=GF1002)
+
+
+
+```
+
+## Nubraižykite grafiką
+
+* Nubraižykite prieš tai žingsnyje apdorotus duomenis linijine diagrama su taškais (shape) 
+* Spalvą priskirkite geo
+* Taškų (shape) formą priskirkite išlaidų rūšims. 
+* Tikėtina Jums reikės googlinti arba ieškoti stackoverflow, kaip pranešti ggplot2, kaip yra sugrupuoti duomenys (jeigu norite jog visos 4 linijos būtų viename grafike), alternatyviai galite skaidyti grafiką į dvi dalis, pagal išlaidų rūšis (tada skaidymas turi vykti naudojant vieną iš ggplot2 komandų)
+* Nepamirškite tvarkingo apipavidalinimo (ašys, antraštės ir t.t.)
+
+```{r}
+a <- ggplot(df2, aes(x=time, y=pasalpa))+
+  geom_line(aes(col=geo))+
+  geom_point()+
+  labs(x="Laikas", title = "Bendrosios valstybes islaidos pasalpoms ir pensijoms nuo 2004m. \nLietuvoje ir ES salyse",y="Islaidos pasalpoms, % nuo BVP", subtitle="Saltinis: Eurostat [gov_10a_exp]")+
+  theme(plot.title = element_text(size=8),
+        axis.title.x = element_text(size=9),
+        axis.title.y = element_text(size=9),
+        axis.text.x = element_text(size=7),
+        axis.text.y = element_text(size=7))+
+  theme(plot.subtitle = element_text(size=9))+
+  theme(legend.title=element_blank())
+b <- ggplot(df2, aes(time, pensija))+
+  geom_line(aes(col=geo))+
+  geom_point()+
+  theme(plot.title = element_text(size=8),
+        axis.title.x = element_text(size=9),
+        axis.title.y = element_text(size=9),
+        axis.text.x = element_text(size=7),
+        axis.text.y = element_text(size=7))+
+  theme(legend.title=element_blank())
+  labs(x="Laikas", y="Islaidos pensijoms, % nuo BVP")
+multiplot <- function(..., plotlist=NULL, file, cols=1, layout=NULL) {
+  require(grid)
+
+  # Make a list from the ... arguments and plotlist
+  plots <- c(list(...), plotlist)
+
+  numPlots = length(plots)
+
+  # If layout is NULL, then use 'cols' to determine layout
+  if (is.null(layout)) {
+    # Make the panel
+    # ncol: Number of columns of plots
+    # nrow: Number of rows needed, calculated from # of cols
+    layout <- matrix(seq(1, cols * ceiling(numPlots/cols)),
+                    ncol = cols, nrow = ceiling(numPlots/cols))
+  }
+
+ if (numPlots==1) {
+    print(plots[[1]])
+
+  } else {
+    # Set up the page
+    grid.newpage()
+    pushViewport(viewport(layout = grid.layout(nrow(layout), ncol(layout))))
+
+    # Make each plot, in the correct location
+    for (i in 1:numPlots) {
+      # Get the i,j matrix positions of the regions that contain this subplot
+      matchidx <- as.data.frame(which(layout == i, arr.ind = TRUE))
+
+      print(plots[[i]], vp = viewport(layout.pos.row = matchidx$row,
+                                      layout.pos.col = matchidx$col))
+    }
+  }
+}
+multiplot(a,b)
+
+```
+
+
+
+## Apskaičiuokite
+
+Taip pat, Jūs nusprendėte pateikti lentelę, kurioje būtų matyti kiek % BVP pensijoms ir pašalpoms skyrė EU28 ir Lietuva 2017m.
+Visgi vien tik procentinės išraiškos nėra labai informatyvios, tad Jūs nusprendžiate pateikite lentelę (dataframe pageidautiną perleistą į lentelių formavimo komandą) susidedančią iš 2 eilučių (cofog99) ir 4 stulpelių:
+
+* ES28 išlaidos % BVP
+* LT išlaidos % BVP
+* skirtumas procentiniais punktais (primenu, 1.9%-1.5%=0.4 proc.punkto)
+* trečio stulpelio reikšmes sudauginkite su Lietuvos 2017m BVP (= 41857 mln eur), nes norite žinoti, kiek mln eurų reiktų skirti šioms sritims, tam kad pasiektume ES vidurkį
+* PERSPĖJIMAS: kai skaičiuosite reikalingas lėšas, pasitikrinkite, ar teisingai skaičiuojate  kai sudauginate su proc. punktais! :)
+
+```{r}
+df3 <- filter(df2, time=="2017-01-01")
+df3 <- as.data.frame(t(df3))
+colnames(df3) <- c("EU28","LT")
+df3 <- slice(df3,3,4)
+rownames(df3) <- c("Pasalpoms", "Pensijoms")
+df3$EU28 <- as.numeric(sub(",",".", df3$EU28, fixed=T))
+df3$LT <- as.numeric(sub(",",".", df3$LT, fixed=T))
+df3 <- mutate(df3, Skirtumas=(EU28-LT))
+bvp <- 41857000000
+df3$ReikiaSkirtiEUR <- df3$Skirtumas/100 * bvp
+rownames(df3) <- c("Pasalpoms", "Pensijoms")
+df3 %>%
+  kable() %>%
+  kable_styling(full_width = F)
+
+```
+
+
+## Grafikas 2 
+
+Pastebėję, jog socialinės išlaidos pakankamai skiriasi tarp LT is ES28, Jūs nusprendėte nubraižyti stulpelinį grafiką, kuriame būtų pavaizduotos visų ES (t.y. 28!) šalių išlaidos socialiniai sričiai bendrai ("Social protection") % nuo BVP. Naudokite 2017 metų rodiklius. Tam jog matytųsi ES28 vidurkis nubraižykite jį į grafiką kaip horizontalią liniją.
+
+Jums gali reikėti atsisiųsti reikiamą Eurostat dataset iš naujo. 
+Stulpeliai turėtų būti surikiuoti didėjančia tvarka, jų viršuje pateikiamos  stulpelių reikšmės.
+
+Grafikas turėtų atrodyti daugmaž taip: https://i2.wp.com/lithuanian-economy.net/wp-content/uploads/2019/03/private_expenditue_MTEP_2017.jpeg?resize=768%2C427
+
+
+```{r}
+df4 <- get_eurostat("gov_10a_exp", stringsAsFactors=FALSE) %>% filter(sector=="S13",                                                  cofog99 %in% c("GF10"),
+                                  geo %in% c("BE","BG","CZ","DK","DE","EE","IE","EL","ES","FR","HR","IT","CY","LV","LT","LU","HU","MT","NL","AT","PL","PT","RO","SI","SK","FI","SE","UK"),
+                                  na_item =="TE", 
+                                  sector=="S13",
+                                  unit=="PC_GDP")
+df4 <- filter(df4, time=="2017-01-01")
+mean <- mean(df4$values)
+ggplot(df4, aes(x=reorder(geo,values), y=values))+
+  geom_bar(stat="identity", fill="steelblue")+
+  geom_hline(aes(yintercept=mean))+
+  geom_text(aes(label=values), position=position_dodge(width=0.9), vjust=-0.25, size=2)+
+  labs(x="Valstybes", title = "Bendrosios valstybes islaidos socialinei apsaugai (% nuo BVP)\nES salyse 2017m.",y="% nuo BVP", subtitle="Saltinis: Eurostat [gov_10a_exp]")
+
+```
+
+
+## Vertinimas
+Pateikite trumpą situacijos vertinimą remiantis iki šiol atlikta duomenų analizę. Pateikite savo įžvalgas, kaip būtų galima spręsti žemų pensijų  problemas ateityje. Drąsiai galite remtis Europos Komisijos ataskaita bei rekomendacijomis Lietuvai. 
+
+* Rekomendacija: https://ec.europa.eu/info/sites/info/files/file_import/2019-european-semester-country-specific-recommendation-commission-recommendation-lithuania_en.pdf
+* Ataskaita : https://ec.europa.eu/info/sites/info/files/file_import/2019-european-semester-country-report-lithuania_lt.pdf
+
+```{r, eval=TRUE}
+#Parašykite apie 200 (+- 20) žodžių. 
+#Rašykite VIETOJ Lore ipsum... teksto t.y. tarpe tarp abiejų kabučių.
+#Jeigu norite žinoti kiek žodžių parašėte, galite runninti tik šit snippet' jo kampytyje nuspaudę ant žalio trikampio rodančio į dešinę
+
+str1 <-
+"
+Pensijos - viena didziausiu problemu, su kuria susiduria ne tik Lietuva, bet ir apskritai visa senejanti Europos visuomene. Didejant vidutinei gyvenimo trukmei ir augant vidutiniam visuomenes amziui bei tuo paciu pensijinio amziaus zmoniu skaiciui,  pensijos kelia vis didesni susirupinima. Kalbant apie Lietuva, sios problemos viesas eskalavimas ir nepasitenkinimas tesiasi ilga laika. Kaip teisingu ir siekiamu pensiju pavyzdys pateikiamos Vakaru valstybiu pensijos. Dazniausi argumentai, kodel Lietuvoje pensijos ismoku dydis atsilieka nuo Vakaru, yra: pinigai isvogiami, isdalinami pasalpoms ar kitiems sektoriams. Tai byloja apie visiska nesupratima ir finansini nerastinguma. Isanalizavus pateiktus duomenis, mes iskart matome, jog pirmoji priezastis yra ta, jog Lietuva pagal islaidas visai socialinei sriciai (% nuo BVP) atsilieka nuo ES vidurkio 4.1proc ir apskritai yra 2-a nuo galo. Ismokomis pensijoms, nuo vidurkio atsiliekama 4.4procentais. Norint tai pakeisti ir priarteti prie vidurkio yra vienintele iseitis - valstybei didinti islaidas socialinei sriciai. Tam yra butinos esmines reformos. Visu pirma valstybes biudzeto perskirstymo didinimas ir didesni mokesciai, kurie leistu is esmes padidinti surenkamu pinigu biudzete suma ir tuo paciu suma, kuria galima perskirstyti socialiai jautrioms sritims. Kol sisteminiai pokyciai nebus igalioti, tol pensiju didinimo taip pat nebus, kadangi elementariai nera is kur, neapkarpant ismoku kitoms sritims, paimti lesu.
+"
+sapply(strsplit(str1," "),length)
+```
+
+
+
+
+
+
+
+## Darbo užbaigimo ir ship'inimo instrukcija:
+* Sumegzkite šį dokumentą į `html`, jeigu Jūsų kode yra klaidų ir sumezgimas neveikia, išsaugokite šį failą tiesiog "File -> save"
+* Savo Github paskyroje sukurkite repo "exam"
+* Pushinkit lokalią repo į Github. Direktorijoje turi būti 2 failai: "StudNr_Vardas_Pavardė.Rmd" ir "StudNr_Vardas_Pavardė.html"
+* Įsitikinkite jog Githube guli repo kopija ir repo url įrašykite į google docs J stulpelį: https://docs.google.com/spreadsheets/d/1H_ts3wTKYZ4rocmFseR2YJtZHfhJ543MUWsTTa7x5Kc/edit?usp=sharing
